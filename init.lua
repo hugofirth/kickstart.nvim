@@ -152,6 +152,13 @@ vim.opt.rtp:prepend(lazypath)
 --
 -- NOTE: Here is where you install your plugins.
 require('lazy').setup({
+  'onsails/lspkind-nvim',
+  {
+    'supermaven-inc/supermaven-nvim',
+    config = function()
+      require('supermaven-nvim').setup {}
+    end,
+  },
   -- NOTE: Plugins can be added with a link (or for a github repo: 'owner/repo' link).
   'tpope/vim-sleuth', -- Detect tabstop and shiftwidth automatically
 
@@ -612,18 +619,28 @@ require('lazy').setup({
         },
       }
 
-      require('lspconfig').sourcekit.setup {
+      -- Swift / SourceKit-LSP (Neovim 0.11+ style)
+      -- Requires: neovim/nvim-lspconfig on your runtimepath
+      -- Note: Mason does NOT install sourcekit-lsp; it must be available via Xcode or Swift toolchain.
+
+      vim.lsp.config('sourcekit', {
+        -- If you're on macOS with Xcode, `xcrun sourcekit-lsp` is typical:
         cmd = { 'xcrun', 'sourcekit-lsp' },
         filetypes = { 'swift' },
-        root_dir = require('lspconfig.util').root_pattern('Package.swift', '*.xcodeproj'),
+        root_dir = (function()
+          -- using the same util helper from lspconfig
+          return require('lspconfig.util').root_pattern('Package.swift', '*.xcodeproj', '.git')
+        end)(),
         capabilities = {
           workspace = {
-            didChangeWatchedFiles = {
-              dynamicRegistration = true,
-            },
+            didChangeWatchedFiles = { dynamicRegistration = true },
           },
         },
-      }
+        -- on_attach = function(client, bufnr) ... end,  -- (optional) keep your old on_attach here
+      })
+
+      -- Allow it to attach for its filetypes when you open a Swift project:
+      vim.lsp.enable 'sourcekit'
 
       -- Ensure the servers and tools above are installed
       --
@@ -745,6 +762,7 @@ require('lazy').setup({
       local luasnip = require 'luasnip'
       luasnip.config.setup {}
 
+      local lspkind = require 'lspkind'
       cmp.setup {
         snippet = {
           expand = function(args)
@@ -770,7 +788,7 @@ require('lazy').setup({
           -- Accept ([y]es) the completion.
           --  This will auto-import if your LSP supports it.
           --  This will expand snippets if the LSP sent a snippet.
-          ['<C-y>'] = cmp.mapping.confirm { select = true },
+          ['<Tab>'] = cmp.mapping.confirm { select = true },
 
           -- If you prefer more traditional completion keymaps,
           -- you can uncomment the following lines
@@ -815,6 +833,31 @@ require('lazy').setup({
           { name = 'luasnip' },
           { name = 'path' },
           { name = 'nvim_lsp_signature_help' },
+          { name = 'supermaven' },
+        },
+        formatting = {
+          format = lspkind.cmp_format {
+            mode = 'symbol', -- show only symbol annotations
+            maxwidth = {
+              -- prevent the popup from showing more than provided characters (e.g 50 will not show more than 50 characters)
+              -- can also be a function to dynamically calculate max width such as
+              -- menu = function() return math.floor(0.45 * vim.o.columns) end,
+              menu = 50, -- leading text (labelDetails)
+              abbr = 50, -- actual suggestion item
+            },
+            symbol_map = {
+              Supermaven = 'SM',
+            },
+            ellipsis_char = '...', -- when popup menu exceed maxwidth, the truncated part would show ellipsis_char instead (must define maxwidth first)
+            show_labelDetails = true, -- show labelDetails in menu. Disabled by default
+
+            -- The function below will be called before any actual modifications from lspkind
+            -- so that you can provide more controls on popup customization. (See [#30](https://github.com/onsails/lspkind-nvim/pull/30))
+            -- before = function (entry, vim_item)
+            -- ...
+            -- return vim_item
+            -- end
+          },
         },
       }
     end,
